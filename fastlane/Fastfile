@@ -1,0 +1,80 @@
+default_platform :ios
+
+class Config
+  TARGETS = {
+    store: {
+      app_identifier: "io.kylejm.tap",
+    }
+  }
+end
+
+module FastlaneHelpers
+  module_function
+
+  def download_all_profiles(readonly, type, renew)
+    if renew
+      nuke_type = type == "appstore" ? "distribution" : type
+      sh "fastlane match nuke #{nuke_type} --skip_confirmation -a #{Config::TARGETS[:store][:app_identifier]} --git_full_name 'Fastlane Match' --git_user_email 'match@fastlane.tools'"
+    end
+
+    identifiers = Config::TARGETS.map { |k, v| v[:app_identifier] }
+    match(app_identifier: identifiers,
+          readonly: readonly,
+          type: type,
+          shallow_clone: 1,
+          git_full_name: 'Fastlane Match',
+          git_user_email: 'match@fastlane.tools')
+  end
+end
+
+extend FastlaneHelpers
+
+platform :ios do
+  lane :download_all_dev_profiles do
+      download_all_profiles(true, "development", false)
+  end
+
+  lane :download_all_store_profiles do
+      download_all_profiles(true, "appstore", false)
+  end
+
+  lane :download_all_profiles do
+      download_all_dev_profiles
+      download_all_store_profiles
+  end
+
+  lane :renew_all_dev_profiles do
+      download_all_profiles(false, "development", true)
+  end
+
+  lane :renew_all_store_profiles do
+      download_all_profiles(false, "appstore", true)
+  end
+
+  lane :renew_all_profiles do
+      renew_all_dev_profiles
+      renew_all_store_profiles
+  end
+
+  lane :renew_push_certs do
+    Config::TARGETS.each do |k, v|
+      pem(
+        force: true,
+        development: true,
+        app_identifier: v[:app_identifier]
+      )
+
+      pem(
+        force: true,
+        development: false,
+        app_identifier: v[:app_identifier]
+      )
+
+      renew_all_profiles
+    end
+  end
+end
+
+
+# More information about multiple platforms in fastlane:
+# https://github.com/KrauseFx/fastlane/blob/master/docs/Platforms.md
